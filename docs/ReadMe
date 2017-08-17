@@ -2,6 +2,13 @@ A DoomLike 2.5D Engine (DLE) by Alpyre
 
 Build with SAS/C v6.58 (with the provided makefile)
 
+Controls:
+wasd : Movement and look around
+F1   : Toggle FPS counter
+F2   : Toggle sectorID display
+f    : Toggle full screen
+ESC  : Quit
+
 ---------------------
 Development History |
 ---------------------
