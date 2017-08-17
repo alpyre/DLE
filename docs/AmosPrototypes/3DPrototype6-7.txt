@@ -1,0 +1,392 @@
+'Set the screen up
+'*****************
+Degree
+Default Palette $0,$777,$C42,$F00
+Screen Open NUM,320,128,4,Lowres : Curs Off : Flash Off : Cls 0
+Paste Bob 0,0,1
+Double Buffer
+Autoback 0
+Update Off
+
+'***************************************
+
+'Some Constants
+'**************
+'3rd screen start x coordinate
+S3O=214 : Rem Screen3 x-offset
+S3S=100 : Rem Screen3 x-size
+S3C=S3O+S3S/2 : Rem Screen3 center x-coord
+
+VT=12 : Rem Total number of vertises used
+WT=12 : Rem Total number of walls used
+ST=3 : Rem Total number of sectors used
+Dec VT : Dec WT : Dec ST
+
+'Viewers distance from screen
+D=1
+'height of the wall (actually this is half of its height)
+H=10
+'scale image up to fill the screen
+S=40
+
+HDS=H*D*S
+
+'Texture sizes
+T_XS#=32
+T_YS#=48
+T_XP#=T_XS#*(H*2)/T_YS# : Rem Texture X Proportion
+
+'Dim variables
+'*************
+Dim V(VT,1) : Rem (0-VT) vertises with (0)x,(1)y coordinates
+Dim W(WT,2) : Rem (0-WT) wall definitions (0)first vertex, (1)second vertex, (2) Length of wall (hypothenus)
+Dim S(ST,13) : Rem (0-ST) sector definitions
+                  '(0-3) 4 vertexes that define a sector,
+                  '(4)   how many walls to be drawn in this sector,
+                  '(5-14)the (max.) 10 walls to be drawn (in draw order)
+
+Dim V#(VT,1) : Rem Memory for the transformed vertises
+
+'****************************************
+
+'Define vertises and walls
+V(0,0)=10 : V(0,1)=10
+V(1,0)=80 : V(1,1)=10
+V(2,0)=80 : V(2,1)=60
+V(3,0)=75 : V(3,1)=60
+V(4,0)=65 : V(4,1)=60
+V(5,0)=10 : V(5,1)=60
+V(6,0)=10 : V(6,1)=75
+V(7,0)=65 : V(7,1)=75
+V(8,0)=75 : V(8,1)=75
+V(9,0)=80 : V(9,1)=75
+V(10,0)=80 : V(10,1)=90
+V(11,0)=10 : V(11,1)=90
+
+W(0,0)=0 : W(0,1)=1
+W(1,0)=1 : W(1,1)=2
+W(2,0)=2 : W(2,1)=3
+W(3,0)=4 : W(3,1)=5
+W(4,0)=5 : W(4,1)=0
+W(5,0)=3 : W(5,1)=8
+W(6,0)=7 : W(6,1)=4
+W(7,0)=9 : W(7,1)=10
+W(8,0)=10 : W(8,1)=11
+W(9,0)=11 : W(9,1)=6
+W(10,0)=6 : W(10,1)=7
+W(11,0)=8 : W(11,1)=9
+
+Gosub _FILLWALLLENGTHS
+
+S(0,0)=0 : S(0,1)=1 : S(0,2)=2 : S(0,3)=5 : S(0,4)=9
+S(0,5)=8
+S(0,6)=7
+S(0,7)=6
+S(0,8)=5
+S(0,9)=0
+S(0,10)=1
+S(0,11)=2
+S(0,12)=3
+S(0,13)=4
+
+S(1,0)=4 : S(1,1)=3 : S(1,2)=7 : S(1,3)=8 : S(1,4)=8
+S(1,5)=4
+S(1,6)=0
+S(1,7)=1
+S(1,8)=7
+S(1,9)=8
+S(1,10)=9
+S(1,11)=5
+S(1,12)=6
+
+S(2,0)=6 : S(2,1)=9 : S(2,2)=11 : S(2,3)=10 : S(2,4)=9
+S(2,5)=0
+S(2,6)=1
+S(2,7)=6
+S(2,8)=5
+S(2,9)=10
+S(2,10)=11
+S(2,11)=7
+S(2,12)=8
+S(2,13)=9
+
+'Coordinates of the player
+'*************************
+PX#=50 : PY#=50
+ANGLE=0
+
+'main loop start
+Do
+   'Have the trigonometry values at hand
+   ANGLECOS#=Cos(ANGLE)
+   ANGLESIN#=Sin(ANGLE)
+
+   'Divide the screen into 3 parts
+   Clip
+   Draw 106,0 To 106,127
+   Draw 213,0 To 213,127
+
+   '*********************
+   'draw the absolute map
+   '*********************
+'   Clip 0,0 To 105,127
+'
+'   'Draw the walls
+'   For I=0 To WT
+'      If I>0 Then Ink 2 Else Ink 1
+'      '       X1      ,   Y1       To     X2     ,    Y2
+'      Draw V(W(I,0),0),V(W(I,0),1) To V(W(I,1),0),V(W(I,1),1)
+'   Next
+'
+'   'Draw the player
+'   Draw PX#,PY# To ANGLECOS#*5+PX#,ANGLESIN#*5+PY#
+'   Ink 1 : Plot PX#,PY#
+
+   '************************
+   'draw the transformed map
+   '************************
+   Clip 107,0 To 212,127
+
+   'transform the all vertexes relative to the player
+   For I=0 To VT
+      Gosub TRANSFORM
+   Next
+
+   'the magic number 156 below is 50 + 106
+   '               Player Draw coord + offset to the 2nd screen area
+   'draw the walls
+   For I=0 To WT
+      Draw 156-V#(W(I,0),0),50-V#(W(I,0),1) To 156-V#(W(I,1),0),50-V#(W(I,1),1)
+   Next
+
+   'draw the player
+   Draw 156,50 To 156,45
+   Ink 1 : Plot 156,50
+
+   '********************************************
+   'draw the perspective transformed map (3D FP)
+   '********************************************
+   Clip : Ink 1
+
+   Gosub _FINDSECTOR
+   If SCTR=-1 Then Goto SKIP2
+
+   For L=5 To S(SCTR,4)+4
+      I=S(SCTR,L)
+
+      _CLIPPED=False
+      If V#(W(I,0),1)<D and V#(W(I,1),1)<D Then Goto SKIP
+      If V#(W(I,0),1)<D or V#(W(I,1),1)<D
+         TX1#=V#(W(I,0),0) : TX2#=V#(W(I,1),0)
+         TY1#=V#(W(I,0),1) : TY2#=V#(W(I,1),1)
+         _CLIPPED=True
+         Gosub _CLIP
+      End If
+
+      X1#=(-V#(W(I,0),0)*D/V#(W(I,0),1))*S : Y1A#=(-HDS/V#(W(I,0),1)) : Y1B#=(HDS/V#(W(I,0),1))
+      X2#=(-V#(W(I,1),0)*D/V#(W(I,1),1))*S : Y2A#=(-HDS/V#(W(I,1),1)) : Y2B#=(HDS/V#(W(I,1),1))
+
+      If _CLIPPED
+         V#(W(I,0),0)=TX1# : V#(W(I,1),0)=TX2#
+         V#(W(I,0),1)=TY1# : V#(W(I,1),1)=TY2#
+      End If
+
+      'Paint the walls
+      '***************
+
+      If X2#=X1# Then Goto SKIP
+      If X1#<-50 and X2#<-50 Then Goto SKIP
+      If X1#>50 and X2#>50 Then Goto SKIP
+
+      'calculate the tangent value of the perspective wall top
+      'as the next section draws the vertical lines to paint the wall
+      'this value will be used to preserve the wall perspective height
+      'at every step:.
+      DH#=(Y1A#-Y2A#)/(X2#-X1#)
+
+      'These ifs provide the drawing is done always from small height
+      'to big height. That is obligatory because when the opposite is done
+      'DH value becomes negative and gets to a wrong value when rounded.
+
+      If X2#>X1#
+         If DH#>0
+            'Clamp the rendering into display area horizontally
+            If X1#<-50 : XS=-X1#-50 : Else : XS=0 : End If
+            XE=X2#-X1# : If XE+X1#>50 : XE=50-X1# : End If
+
+            WSIN#=(V#(W(I,1),1)-V#(W(I,0),1))/W(I,2)
+
+            For X=XS To XE
+               _DH#=X*DH#
+
+                  Y_H=Y1B#-Y1A#+_DH#+_DH# : Rem Wall height at this x
+                  Y_S#=T_YS#/Y_H : Rem Y_Skip value for texture mapping
+
+                  _TY#=(-HDS)/(Y1A#-_DH#) : Rem Y distance at this x
+                  _TL#=(V#(W(I,1),1)-_TY#)/WSIN#
+
+                  H_S#=(W(I,2)-_TL#)/T_XP#*S
+
+               'Clamp the rendering into display area vertically
+               YS=Y1A#-_DH#
+               If YS<-50 : T_Y=-YS-50 : YS=-50 : Else : T_Y=0 : End If
+               YE=Y1B#+_DH#
+               If YE>77 : YE=77 : End If
+
+               For Y=YS To YE
+                  Ink Point(H_S# mod 31,(Y_S#*T_Y))
+                  Plot X1#+X+S3C,Y+50
+                  Inc T_Y
+               Next Y
+            Next
+         Else
+            'Clamp the rendering into display area horizontally
+            If X2#>50 : XS=X2#-50 : Else : XS=0 : End If
+            XE=X2#-X1# : If XE>X2#+50 : XE=X2#+50 : End If
+
+            WSIN#=(V#(W(I,0),1)-V#(W(I,1),1))/W(I,2)
+
+            For X=XS To XE
+               _DH#=-X*DH#
+
+                  Y_H=Y2B#-Y2A#+_DH#+_DH# : Rem Wall height at this x
+                  Y_S#=T_YS#/Y_H : Rem Y_Skip value for texture mapping
+
+                  _TY#=(-HDS)/(Y2A#-_DH#) : Rem Y distance at this x
+                  If WSIN#=0
+                     _TL#=V#(W(I,0),0)-(X2#-X)*H/(Y2A#)
+                  Else
+                     _TL#=(V#(W(I,0),1)-_TY#)/WSIN#
+                  End If
+                  H_S#=_TL#/T_XP#*S
+
+               'Clamp the rendering into display area vertically
+               YS=Y2A#-_DH#
+               If YS<-50 : T_Y=-YS-50 : YS=-50 : Else : T_Y=0 : End If
+               YE=Y2B#+_DH#
+               If YE>77 : YE=77 : End If
+
+               For Y=YS To YE
+                  Ink Point(H_S# mod 31,(Y_S#*T_Y))
+                  Plot X2#-X+S3C,Y+50
+                  Inc T_Y
+               Next Y
+            Next
+         End If
+     ' Else
+     '    If DH#>0
+     '       'Clamp the rendering into display area
+     '       If X2#<-50 : XS=-X2#-50 : Else : XS=0 : End If
+     '       XE=X1#-X2# : If XE+X2#>50 : XE=50-X2# : End If
+     '
+     '       For X=XS To XE
+     '          DH=X*DH#
+     '          Draw X2#+X+S3C,Y2A#-DH To X2#+X+S3C,Y2B#+DH
+     '       Next
+     '    Else
+     '       'Clamp the rendering into display area
+     '       If X1#>50 : XS=X1#-50 : Else : XS=0 : End If
+     '       XE=X1#-X2# : If XE>X1#+50 : XE=X1#+50 : End If
+     '
+     '       For X=XS To XE
+     '          DH=-X*DH#
+     '          Draw X1#-X+S3C,Y1A#-DH To X1#-X+S3C,Y1B#+DH
+     '       Next
+     '    End If
+      End If
+
+
+      'This section draws the wall in wireframes
+      '*****************************************
+   Clip S3O,0 To S3O+S3S,127
+      Ink 0
+'      'draw the wall (only)
+'      Draw X1#S3C,Y1A# To X2#+S3C,Y2A# : Rem Top
+'      Draw X1#S3C,Y1B# To X2#+S3C,Y2B# : Rem Bottom
+      Draw X1#+S3C,Y1A# To X1#+S3C,Y1B# : Rem Left
+      Draw X2#+S3C,Y2A# To X2#+S3C,Y2B# : Rem Right
+      Ink 1
+Clip
+      SKIP:
+   Next
+      SKIP2:
+   '*******************************************************
+   'Display the drawn frame and clear up for the next frame
+   '*******************************************************
+   Screen Swap : Wait Vbl
+   Cls 0,106,0 To 320,128
+
+   '**********************
+   'Capture keyboard input
+   '**********************
+
+   'Use scancodes instead of inkey$ (much faster)
+   '"w" key (move forwards)
+   If Key State(17)
+      PX#=PX#+ANGLECOS# : PY#=PY#+ANGLESIN#
+   End If
+
+   '"s" key (move backwards)
+   If Key State(33)
+      PX#=PX#-ANGLECOS# : PY#=PY#-ANGLESIN#
+   End If
+
+   '"a" key (turn left)
+   If Key State(32) Then Add ANGLE,-5,0 To 359
+
+   '"d" key (turn right)
+   If Key State(34) Then Add ANGLE,5,0 To 359
+
+   '"m" key (sidestep right)
+   If Key State(55)
+      PX#=PX#-ANGLESIN# : PY#=PY#+ANGLECOS#
+   End If
+
+   '"n" key (sidestep left)
+   If Key State(54)
+      PX#=PX#+ANGLESIN# : PY#=PY#-ANGLECOS#
+   End If
+Loop
+
+_CLIP:
+'Determine which vertex to be clipped
+'************************************
+If V#(W(I,0),1)<D Then C=0 Else C=1
+If C=0 Then _C=1 Else _C=0
+
+V#(W(I,C),0)=((V#(W(I,_C),1)-D)*(V#(W(I,1),0)-V#(W(I,0),0))/(V#(W(I,1),1)-V#(W(I,0),1)))-V#(W(I,_C),0)
+V#(W(I,C),0)=-V#(W(I,C),0)
+V#(W(I,C),1)=D
+Return
+
+TRANSFORM:
+'make the vertex relative to the player
+'**************************************
+V#(I,0)=V(I,0)-PX#
+TD#=V(I,1)-PY#
+'rotate it around players view
+V#(I,1)=V#(I,0)*ANGLECOS#+TD#*ANGLESIN#
+V#(I,0)=V#(I,0)*ANGLESIN#-TD#*ANGLECOS#
+Return
+
+_FILLWALLLENGTHS:
+For I=0 To WT
+   If V(W(I,0),0)=V(W(I,1),0)
+      W(I,2)=Abs(V(W(I,1),1)-V(W(I,0),1))
+   Else If V(W(I,0),1)=V(W(I,1),1)
+      W(I,2)=Abs(V(W(I,1),0)-V(W(I,0),0))
+   Else
+      W(I,2)=Sqr((V(W(I,1),0)-V(W(I,0),0))*(V(W(I,1),0)-V(W(I,0),0))+(V(W(I,1),1)-V(W(I,0),1))*(V(W(I,1),1)-V(W(I,0),1)))
+   End If
+Next I
+Return
+
+_FINDSECTOR:
+SCTR=-1
+For L=0 To ST
+   If PX#>V(S(L,0),0) and PX#<V(S(L,1),0) and PY#>V(S(L,0),1) and PY#<V(S(L,2),1)
+      SCTR=L
+      Exit
+   End If
+Next L
+Return

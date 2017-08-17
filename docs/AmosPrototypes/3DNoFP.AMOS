@@ -1,0 +1,395 @@
+'Set the screen up 
+'***************** 
+Degree 
+Default Palette $0,$777,$C42,$F00
+Screen Open 0,320,128,2,Lowres : Curs Off : Flash Off : Cls 0
+Double Buffer 
+Autoback 0
+Update Off 
+Ink 1
+
+'*************************************** 
+
+'Some Constants
+'**************
+' Three Screen Sections:   
+' 0-105 : 107-202 : 214-320
+SC2C=155
+
+VT=12 : Rem Total number of vertices used
+WT=12 : Rem Total number of walls used 
+ST=3 : Rem Total number of sectors used 
+Dec VT : Dec WT : Dec ST
+
+'Viewers distance from screen
+D=1
+'height of the wall (actually this is half of its height)
+H=10
+'scale image up to fill the screen 
+S=50
+'precision to use in int calculations
+PRC=64
+
+'Dim variables 
+'************* 
+Dim V(VT,1) : Rem (0-VT) vertices with (0)x,(1)y coordinates   
+Dim W(WT,2) : Rem (0-WT) wall definitions (0)first vertex, (1)second vertex, (2) Length of wall (hypothenus) 
+Dim VT(VT,1) : Rem Memory for the transformed vertices
+Dim S(ST,13) : Rem (0-ST) sector definitions  
+                  '(0-3) 4 vertices that define a sector,  
+                  '(4)   how many walls to be drawn in this sector,  
+                  '(5-14)the (max.) 10 walls to be drawn (in draw order)   
+
+Dim TRIG(15) : Rem Instead of using FP Sin(), Cos() instructions, I will create 
+             ' a .00 precise lookup table. There will be 60 different angles. 
+             ' So 15 different values for 4 quadrals. 
+             ' Values are filled with TRIGFILL
+             ' Queried with BRINGTRIG 
+
+Gosub TRIGFILL
+'****************************************
+
+'Define vertices and walls 
+V(0,0)=10*PRC : V(0,1)=10*PRC
+V(1,0)=80*PRC : V(1,1)=10*PRC
+V(2,0)=80*PRC : V(2,1)=60*PRC
+V(3,0)=75*PRC : V(3,1)=60*PRC
+V(4,0)=65*PRC : V(4,1)=60*PRC
+V(5,0)=10*PRC : V(5,1)=60*PRC
+V(6,0)=10*PRC : V(6,1)=75*PRC
+V(7,0)=65*PRC : V(7,1)=75*PRC
+V(8,0)=75*PRC : V(8,1)=75*PRC
+V(9,0)=80*PRC : V(9,1)=75*PRC
+V(10,0)=80*PRC : V(10,1)=90*PRC
+V(11,0)=10*PRC : V(11,1)=90*PRC
+
+W(0,0)=0 : W(0,1)=1
+W(1,0)=1 : W(1,1)=2
+W(2,0)=2 : W(2,1)=3
+W(3,0)=4 : W(3,1)=5
+W(4,0)=5 : W(4,1)=0
+W(5,0)=3 : W(5,1)=8
+W(6,0)=7 : W(6,1)=4
+W(7,0)=9 : W(7,1)=10
+W(8,0)=10 : W(8,1)=11
+W(9,0)=11 : W(9,1)=6
+W(10,0)=6 : W(10,1)=7
+W(11,0)=8 : W(11,1)=9
+
+S(0,0)=0 : S(0,1)=1 : S(0,2)=2 : S(0,3)=5 : S(0,4)=9
+S(0,5)=8
+S(0,6)=7
+S(0,7)=6
+S(0,8)=5
+S(0,9)=0
+S(0,10)=1
+S(0,11)=2
+S(0,12)=3
+S(0,13)=4
+
+S(1,0)=4 : S(1,1)=3 : S(1,2)=7 : S(1,3)=8 : S(1,4)=8
+S(1,5)=4
+S(1,6)=0
+S(1,7)=1
+S(1,8)=7
+S(1,9)=8
+S(1,10)=9
+S(1,11)=5
+S(1,12)=6
+
+S(2,0)=6 : S(2,1)=9 : S(2,2)=11 : S(2,3)=10 : S(2,4)=9
+S(2,5)=0
+S(2,6)=1
+S(2,7)=6
+S(2,8)=5
+S(2,9)=10
+S(2,10)=11
+S(2,11)=7
+S(2,12)=8
+S(2,13)=9
+
+'Coordinates of the player 
+'*************************   
+PX=50*PRC : PY=50*PRC
+ANGLE=0
+
+VAR#=1
+
+Ink 1
+
+'main loop start 
+Do 
+   'Have the trigonometry values at hand
+   Gosub BRINGTRIG
+   
+   'Divide the screen into 3 parts
+   Clip 
+   Draw 106,0 To 106,127
+   Draw 213,0 To 213,127
+   
+   '*********************   
+   'draw the absolute map 
+   '********************* 
+   Clip 0,0 To 105,127
+
+   'Draw the walls
+   For I=0 To WT
+      '       X1          ,   Y1           To      X2        ,     Y2      
+      Draw V(W(I,0),0)/PRC,V(W(I,0),1)/PRC To V(W(I,1),0)/PRC,V(W(I,1),1)/PRC
+   Next 
+
+'   'Draw the player 
+   Draw PX/PRC,PY/PRC To((ANGLECOS*5)+PX)/PRC,((ANGLESIN*5)+PY)/PRC
+   Ink 1 : Plot PX/PRC,PY/PRC
+
+   '************************    
+   'draw the transformed map
+   '************************
+   Clip 107,0 To 212,127
+   
+'   'transform the all vertices relative to the player 
+   For I=0 To VT
+      Gosub TRANSFORM
+   Next 
+   
+   'the magic number 156 below is 50 + 106
+   '               Player Draw coord + offset to the 2nd screen area
+   'draw the walls  
+   For I=0 To WT
+      Draw 156-(VT(W(I,0),0)/PRC),50-(VT(W(I,0),1)/PRC) To 156-(VT(W(I,1),0)/PRC),50-(VT(W(I,1),1)/PRC)
+   Next 
+   
+   'draw the player   
+   Draw 156,50 To 156,45
+   Plot 156,50
+
+   '********************************************
+   'draw the perspective transformed map (3D FP)
+   '********************************************
+   Clip : Ink 1
+
+   Gosub _FINDSECTOR
+   If SCTR=-1 Then Goto SKIP2
+   
+   For L=5 To S(SCTR,4)+4
+      I=S(SCTR,L)
+      'If I>0 Then Goto SKIP 
+
+      _CLIPPED=False
+      If VT(W(I,0),1)<D and VT(W(I,1),1)<D Then Goto SKIP
+      If VT(W(I,0),1)<D or VT(W(I,1),1)<D
+         TX1=VT(W(I,0),0) : TX2=VT(W(I,1),0)
+         TY1=VT(W(I,0),1) : TY2=VT(W(I,1),1)
+         _CLIPPED=True
+         Gosub _CLIP
+      End If 
+      
+      X1=(-(VT(W(I,0),0)*D*S)/VT(W(I,0),1))+50 : Y1A=(-(H*D*S*PRC)/VT(W(I,0),1))+50 : Y1B=((H*D*S*PRC)/VT(W(I,0),1))+50
+      X2=(-(VT(W(I,1),0)*D*S)/VT(W(I,1),1))+50 : Y2A=(-(H*D*S*PRC)/VT(W(I,1),1))+50 : Y2B=((H*D*S*PRC)/VT(W(I,1),1))+50
+      
+      If _CLIPPED
+         VT(W(I,0),0)=TX1 : VT(W(I,1),0)=TX2
+         VT(W(I,0),1)=TY1 : VT(W(I,1),1)=TY2
+      End If 
+
+      'Paint the walls 
+      '*************** 
+
+      If X2=X1 Then Goto SKIP
+      If X1<0 and X2<0 Then Goto SKIP
+      If X1>105 and X2>105 Then Goto SKIP
+
+      'calculate the tangent value of the perspective wall top 
+      'as the next section draws the vertical lines to paint the wall
+      'this value will be used to preserve the wall perspective height 
+      'at every step:. 
+      DH=(PRC*(Y1A-Y2A))/(X2-X1)
+
+      'These ifs provide the drawing is done always from small height
+      'to big height. That is obligatory because when the opposite is done 
+      'DH value becomes negative and gets to a wrong value when rounded. 
+      'Otherwise we'd have to use some sort of Breshenham algorithm  
+
+      If X2>X1
+         If Y1A>Y2A
+            'Clamp the rendering into display area horizontally
+            If X1<0 : XS=-X1 : Else : XS=1 : End If 
+            XE=X2-X1-1 : If XE+X1>104 : XE=105-X1 : End If 
+
+            _DH=XS*DH
+
+            For X=XS To XE
+
+               'Clamp the rendering into display area vertically
+               YS=((Y1A*PRC)-_DH)/PRC
+               If YS<0 : T_Y=-YS : YS=0 : Else : T_Y=0 : End If 
+               YE=((Y1B*PRC)+_DH)/PRC
+               If YE>127 : YE=127 : End If 
+
+               Draw X1+X+214,YS To X1+X+214,YE
+            _DH=_DH+DH
+            Next 
+         Else 
+            'Clamp the rendering into display area horizontally
+            If X2>105 : XS=X2-105 : Else : XS=1 : End If 
+            XE=X2-X1-1 : If XE>X2 : XE=X2 : End If 
+
+            _DH=-XS*DH
+
+            For X=XS To XE
+
+               'Clamp the rendering into display area vertically
+               YS=((Y2A*PRC)-_DH)/PRC
+               If YS<0 : T_Y=-YS : YS=0 : Else : T_Y=0 : End If 
+               YE=((Y2B*PRC)+_DH)/PRC
+               If YE>127 : YE=127 : End If 
+
+               Draw X2-X+214,YS To X2-X+214,YE
+            _DH=_DH-DH
+            Next 
+         End If 
+'      Else  
+'         If DH#>0 
+'            'Clamp the rendering into display area  
+'            If X2#<0 : XS=-X2# : Else : XS=0 : End If 
+'            XE=X1#-X2# : If XE+X2#>104 : XE=105-X2# : End If  
+'
+'            For X=XS To XE
+'               DH=X*DH# 
+'               Draw X2#+X+S3S,Y2A#-DH To X2#+X+S3S,Y2B#+DH
+'            Next  
+'         Else 
+'            'Clamp the rendering into display area  
+'            If X1#>105 : XS=X1#-105 : Else : XS=0 : End If  
+'            XE=X1#-X2# : If XE>X1# : XE=X1# : End If  
+'
+'            For X=XS To XE
+'               DH=-X*DH#
+'               Draw X1#-X+S3S,Y1A#-DH To X1#-X+S3S,Y1B#+DH
+'            Next  
+'         End If 
+      End If 
+      
+
+      'This section draws the wall in wireframes 
+      '***************************************** 
+'   Clip S3S,0 To S3S+105,127
+'      Ink 0 
+'      'draw the wall (only) 
+'      Draw X1+S3S,Y1A To X2+S3S,Y2A : Rem Top                 
+'      Draw X1+S3S,Y1B To X2+S3S,Y2B : Rem Bottom                    
+'      Draw X1+S3S,Y1A To X1+S3S,Y1B : Rem Left                        
+'      Draw X2+S3S,Y2A To X2+S3S,Y2B : Rem Right                   
+'      Ink 1 
+'Clip  
+      SKIP:
+   Next 
+      SKIP2:
+
+   'Calculate how many frames were drawn every 10 seconds 
+   If Timer>100
+      FRAMES$=Str$(FRAMES/2)
+      Timer=0 : FRAMES=0
+   End If 
+
+   Inc FRAMES
+   Text 206,6,FRAMES$
+
+   '*******************************************************   
+   'Display the drawn frame and clear up for the next frame 
+   '*******************************************************   
+   Home : Print "Angle:",ANGLE
+   Screen Swap : Wait Vbl 
+   Cls 0,0,0 To 320,128
+
+   '**********************
+   'Capture keyboard input
+   '**********************
+
+   'Use scancodes instead of inkey$ (much faster) 
+   '"q" key Quit
+   If Key State(16) : End : End If 
+
+   '"w" key (move forwards) 
+   If Key State(17)
+      PX=PX+ANGLECOS : PY=PY+ANGLESIN
+   End If 
+   
+   '"s" key (move backwards)
+   If Key State(33)
+      PX=PX-ANGLECOS : PY=PY-ANGLESIN
+   End If 
+   
+   '"a" key (turn left) 
+   If Key State(32) Then Add ANGLE,-1,0 To 59
+   
+   '"d" key (turn right)
+   If Key State(34) Then Add ANGLE,1,0 To 59
+   
+   '"n" key (sidestep left) 
+   If Key State(54)
+      PX=PX-ANGLESIN : PY=PY+ANGLECOS
+   End If 
+   
+   '"m" key (sidestep right)
+   If Key State(55)
+      PX=PX+ANGLESIN : PY=PY-ANGLECOS
+   End If 
+Loop 
+
+BRINGTRIG:
+MDV=ANGLE mod 15
+' 4 quadrals 
+If ANGLE<15
+   ANGLESIN=TRIG(MDV) : ANGLECOS=TRIG(15-MDV)
+   Return 
+End If 
+If ANGLE<30
+   ANGLESIN=TRIG(15-MDV) : ANGLECOS=-TRIG(MDV)
+Return 
+End If 
+If ANGLE<45
+   ANGLESIN=-TRIG(MDV) : ANGLECOS=-TRIG(15-MDV)
+Return 
+End If 
+If ANGLE<60
+   ANGLESIN=-TRIG(15-MDV) : ANGLECOS=TRIG(MDV)
+Return 
+End If 
+
+TRIGFILL:
+   For T=0 To 15
+      TRIG(T)=Sin(T*6)*PRC
+   Next 
+Return 
+
+TRANSFORM:
+'make the vertex relative to the player
+'**************************************
+VT(I,0)=V(I,0)-PX
+TD=V(I,1)-PY
+'rotate it around players view 
+VT(I,1)=(VT(I,0)*ANGLECOS)/PRC+(TD*ANGLESIN)/PRC
+VT(I,0)=(VT(I,0)*ANGLESIN)/PRC-(TD*ANGLECOS)/PRC
+Return 
+
+_FINDSECTOR:
+SCTR=-1
+For L=0 To ST
+   If PX>V(S(L,0),0) and PX<V(S(L,1),0) and PY>V(S(L,0),1) and PY<V(S(L,2),1)
+      SCTR=L
+      Exit 
+   End If 
+Next L
+Return 
+
+_CLIP:
+'Determine which vertex to be clipped
+'************************************  
+If VT(W(I,0),1)<D Then C=0 Else C=1
+If C=0 Then _C=1 Else _C=0
+
+VT(W(I,C),0)=(((VT(W(I,_C),1)-D)*(VT(W(I,1),0)-VT(W(I,0),0)))/(VT(W(I,1),1)-VT(W(I,0),1)))-VT(W(I,_C),0)
+VT(W(I,C),0)=-VT(W(I,C),0)
+VT(W(I,C),1)=D
+Return 

@@ -1,0 +1,29 @@
+A DoomLike 2.5D Engine (DLE) by Alpyre
+
+Build with SAS/C v6.58 (with the provided makefile)
+
+---------------------
+Development History |
+---------------------
+
+0.4.8b (17.09.2017): - load textures to fastMem where available
+                     - removal of some visual bugs
+                     - change keybindings
+                     - optimize (by removing some unnecessary calculations)
+
+0.4.2b (26.07.2017): - a complete redesign of the wall loop and portal evaluation.
+                       now only transforms the first vertex and calculates
+                       the rest by adding a unit vector (nightlord's advice).
+
+0.3.1b (09.07.2017): - Replaced perspective correct texture mapping algorithm
+                       with an affine mapping one.
+
+0.2.1b (22.06.2017): - all floating point operations are replaced with
+                       integer ones.
+
+0.1.1b (16.06.2017): - now only draws the upper part of the horizon
+                       and reverse blit copies it to the bottom.
+
+0.0.2b (15.06.2017): - optimizations.
+
+0.0.1b (18.05.2017): - first working development version.

@@ -1,0 +1,209 @@
+THE VALUES WE HAVE TO HAVE:
+ - The vertice coords.
+ - The transformed vertice coords.
+ - The clipped transformed coords.
+ - The screen coords for the wall
+   (The X offset and the half height of the wall especially-2 values)
+ - the dH value and its x2 for the walls
+ - the wSin value (for perspective correct texture mapping)
+ - the wLen value (for perspective correct texture mapping)
+ - finally the hSkip and ySkip values (texture u and v values)
+
+------
+
+After the vertices are transformed
+- They are checked against both being behind the player
+- If one is behind the player it is clipped
+- Then screen X coords are calculated (and memorized)
+- Screen X coords are checked against view portal
+- Then screen Y coords are calculated (and memorized)
+
+-------
+
+
+Things to do:
+1)
+Create a struct that returns info about:
+The screen (its view, its viewPort, its bitMap(s),
+its rastPort and its copperLists) (DONE)
+
+2)
+Create a macro that swaps doublebuffered screens.
+(MACRO DIDN'T WORK. TRIED AN INLINE FUNC. Found out
+that there are no inline funcs in SAS/C... HELL WRONG!
+There indeed are. Figured out how they're done :) )
+
+3)
+ReWrite the CreateScreen() function to receive inputs
+about:
+- Resolution (DONE)
+- bitDepth (DONE)
+- colorTable !!!NOTE!!!
+
+Side Notes:
+- DON'T FORGET TO REIMPLEMENT fail() (DONE)
+- DON'T FORGET TO IMPLEMENT colorTable PASSING !!!NOTE!!!
+
+4)
+Line by line translate AMOS instructions to C in a
+file called 3D.c
+  a) Find out what data structures to use for vertices, walls and sectors.
+   - vertices can be an array of struct vertex. So that every one of them can
+     have an ID number, which can also translate into a pointer when needed.
+     * Objection: Well we should make vertices as list nodes. So we can create
+       different vertice lists for every sector. This way we can transform only
+       the vertices in a sector (speed gain). Since every node can have an ID
+       field to relate them to walls and sectors they will also have
+       a pointer so they can be referenced as pointers (speed gain again).
+
+   - walls can be nodes of a MinList. So that we can create different lists
+     for every sector and traverse them in difference orders.
+
+   - sectors can also be an array or a list node. Well if we make them as nodes
+     we can allocate them dynamically in any amount from a data file. So node is
+     the way to go again.
+      * A NOTE: In every loop the algorithm will have to check in which sector
+        the player is currently in. If we have a two way list we can remember the
+        previous sector, check for it first, if not, check for the neighbouring
+        sectors of that sector (speed gain). But what we do if a sector has more
+        than one neighbouring sectors? Well, easy. Add a list to every sector
+        for its neighbours. And only traverse them when the player is not found
+        in current sector.
+  NOTE: The decision of using linked lists for vertices, walls and sectors loses
+     the CPU D-Cache advantage. But lists has more benefits memory usage-wise and
+     implementation-wise. A solution is to make all the allocations pooled and
+     keeping the puddle size as CPU-cache size. That'll help hopefully! (DONE)
+
+   - Create the mapPool memory pool. (DONE)
+
+  b) Write the routines to open MathFFP libraries! (DONE)
+
+5) Optimization ideas:
+  -  If you have float versions of your vertice coordinates in your vertex structs
+  and pre-calculate them in LoadMap(), TRANSFORM part of the main loop may get
+  faster.
+  -  Only blit clear the used part of the screen (not all of it)! !!!NOTE!!! Rethink This!
+  -  Allocate all the variables into mapPool. So that they will hopefully fit
+  the 68000 D-cache.
+  -  Implement portal rendering algorithm. This will require changes in map.data
+  syntax. (DONE)
+  -  Port all the code to gcc. and use inline funcs.
+     NOTE: SAS/C can inline too (DONE). And porting to gcc was easier than I've
+     thought. Yielded no significant speed increase though!
+  -  Screen coordinates for vertices are calculated for each wall and
+     oftenly walls share a vertice. There can be an optimization for
+     this maybe. (DONE)
+
+6) The new sector syntax (for portals)
+  - S:{ID}:{4Vertices}:{ListOfWalls}:{ListOfNeighbors}:{ListOfPortals}
+    ListOfPortals syntax: :{SectorID},{Vertex1},{Vertex2}:...
+    So now we don't need the ListOfNeighbors part. SectorID's in
+    ListOfPortals will do it!
+
+    Ok, now another idea here is this...
+    S:{ID}:{4Vertices}:{ListOfWalls}({V1},{V2}){ListOfWalls}:{ListOfNeighbors}
+    After the list of walls in the sector, a (,) defines a portal with
+    2 vertice ID's. Then the list of walls visible from that vertice follows
+    then may come another portal etc. ((DONE) but glitchy) :(
+    NOTE: Glitch is removed. Yet this syntax still has to change!
+
+ 7) The vList, wList, sList and pList structures are unnecessary.
+    Why did I ever created them to begin with?! Remove them and
+    re-design your code according to that.
+    (NO, they are not unnecessary. In Amiga lists, a list node can only be added
+    to a single list. So unique list node structures and container list items are
+    obligatory)
+
+  8) (changes done in v0.4.2b)
+     Completely rewrite the code to implement a "transform by 2 Additions(VT2A)"
+     algorithm as nightlord adviced.
+
+     The way new algorithm works:
+     - Doesn't calculate all used vertices beforehand at every frame.
+     - So no need for sector vertices list (so removed it).
+     - Trigonometrically transform 2 orientation vectors (east and south).
+       One in East-West direction, other in North-South direction.
+       Both in 1 unit-wall length! (a 45 degree vector may be added later).
+     - Traverse in a clockwise manner through walls.
+     - Trigonometrically transform ONLY the first vertex of the first wall!
+     - Determine the orientation of the second vertex of every unit-wall
+       (precalculated in LoadMap() probably) and find the transformed coords for
+       the second vertex adding the appropriate orientation vector.
+     - Then evaluate the wall for both negative TY's.
+     - If both negative, skip that wall.
+     - If not (CLIP negative vertex if needed and) calculate screenX Coords.
+     - Evaluate second sX to be in screen.
+     - If not skip that wall.
+     - If yes calculate screen Y coords. Draw that wall as ususal. And set
+       the "skipped" variable FALSE. And iterate to the next wall.
+     - The first vertex of the next wall is already transformed now. Just VT2A
+       the second.
+     - And also if "skipped" is FALSE, screen coords for the first vertex of this
+       next wall is already present. Just calculate the second one.
+     - Iterate this way until you get to a portal. If a portal is found, transform
+       its second vertex in a special way (still using orientation vectors).
+     - Calculate both screen coords (sX and sY) of the second vertex.
+     - Create a node that keeps the previous portal limits and push it to a list.
+     - Set new portal limits and draw all the visible walls(&portals) in this portal.
+       (Bail out if portal size of columns are drawn) (NOTE: NOT DONE!)
+     - Recall the previous portal limits from its list. And pop the last node.
+     - Keep iterating the same way until screen size of columns are drawn.
+
+     Steps to rewrite: (-: Not Done / +: Done)
+     + Redesign map syntax for new portal syntax (portal size and type in lToL()).
+     + Redesign NewWall() for wall orientation.
+     + Redesign LoadMap() to pre-calculate and store wall orientations.
+     + Redesign the DumpMap() and test your map loader.
+     + Remove sector vertices list. (DONE)
+     + Remove screen coord memorization.
+     + Create 2 perpendicular unit vectors and transform them every frame.
+     + Redesign portal evaluation!
+     + Redesign main loop to traverse sector walls.
+     + Redesign main loop to transform+clip+screenCoord per wall.
+     - Replace X2 > X1 comparison to ATSTEP2 (line 708) (Rethink on this!!!)
+
+     ***************************
+     * Portal Evaluation Steps *
+     ***************************
+     + Calculate the TX2 for portal
+     + Calculate the two screen X coordinates for the portal
+     + Determine to draw the portal or skip it!
+       + If it should be drawn:
+         + Create a portal memory item and push it to the portal memory list.
+           This memory item should include: 1) Portal TX2 (TXG)
+                                            2) Portal TY2 (TYG)
+                                            3) Parent portalLeft
+                                            4) Parent portalRight
+         + Set the new portalLeft & portalRight
+         + Set TXG = TX1 (pass the coordinate to the next sector)
+           Or if "portalToBig" calculate the first vertex to the next sector
+         + Iterate to the next wall in the list and let it go on...
+       + If it should be skipped
+         + Set TXG = TX2
+         + Traverse the wall list until a portalEnd node.
+         + Iterate one more in the list and let it go on...
+
+     Things to consider:
+       + Find the best places to calculate screen Y's.
+       + Set "skipped" variable inteligently
+       - Remove X2 > X1 Check (line 708)  !!!NOTE!!!: STILL IN THE CODE!!!?
+                                          Now I'm changing the way I create and
+                                          evaluate portals. So this has to remain!!!!
+       + (TY? < 0) evaluation   !!!NOTE!!!: Re-Think? (DONE)
+
+  9) changes planned to be done in v0.4.3b
+     - Increase unit wall length from 10 to 12 (so that we can have better
+       texture aspect and quarter unit walls 12/4=3).      (REJECTED/DOESNT LOOK GOOD)
+     - Reconsider the values that identify a walls length. (REJECTED FOR NOW)
+
+  10) Now we are at v0.4.8b in this commit I'll change the portal evaluation.
+     -
+
+
+CODING NOTES:
+SetAPen(si->rastPort, PEN);     -> Changes color pen
+WritePixel(si->rastPort, X, Y); -> Plots a dot on the coordinates
+Move(si->rastPort, X1, Y1);     -> Draws a line between from X1,Y1 to
+Draw(si->rastPort, X2, Y2);                                  X2,Y2
+ScreenSwap(si);                 -> Swaps display to the other buffer
+DoIO(KeyIO);                    -> Reads keyboard state to KeyIO->io_Data

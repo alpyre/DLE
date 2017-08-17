@@ -1,0 +1,18 @@
+; project configuration (do not delete)
+
+(compiler
+
+    (alias "sas-c/classic")
+
+    (makefile "makefiles/sas-c-classic/makefile")
+
+    (make "make -f %makefile %target")
+
+    (executable "bin/sas-c-classic/DoomLikeEngine")
+
+    (stack "16384")
+
+    (target "")
+
+    (arguments "")
+)
